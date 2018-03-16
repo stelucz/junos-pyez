@@ -1,0 +1,67 @@
+{%- if dev_index != 0 %}
+{%- set secondary = true %}
+{%- else %}
+{%- set secondary = false %}
+{%- endif %}
+set interfaces {{ interface }} unit {{ vlan }} description "{{ interface_description }}"
+set interfaces {{ interface }} unit {{ vlan }} vlan-id {{ vlan }}
+set interfaces {{ interface }} unit {{ vlan }} family inet address {% if secondary == true %}{{ second_ip }}{% else %}{{ prim_ip }}{% endif %}
+{%- if connection_type != 'bgp' %}
+set interfaces {{ interface }} unit {{ vlan }} family inet address {% if secondary == true %}{{ second_ip }}{% else %}{{ prim_ip }}{% endif %} vrrp-group 1 virtual-address {{ static.vrrp_ip }}
+set interfaces {{ interface }} unit {{ vlan }} family inet address {% if secondary == true %}{{ second_ip }}{% else %}{{ prim_ip }}{% endif %} vrrp-group 1 {% if secondary == true %}100{% else %}150{% endif %}
+set interfaces {{ interface }} unit {{ vlan }} family inet address {% if secondary == true %}{{ second_ip }}{% else %}{{ prim_ip }}{% endif %} vrrp-group 1 fast-interval 300
+set interfaces {{ interface }} unit {{ vlan }} family inet address {% if secondary == true %}{{ second_ip }}{% else %}{{ prim_ip }}{% endif %} vrrp-group 1 accept-data
+set interfaces {{ interface }} unit {{ vlan }} family inet address {% if secondary == true %}{{ second_ip }}{% else %}{{ prim_ip }}{% endif %} vrrp-group 1 authentication-key {{ static.vrrp_pass }}
+set interfaces {{ interface }} unit {{ vlan }} family inet address {% if secondary == true %}{{ second_ip }}{% else %}{{ prim_ip }}{% endif %} vrrp-group 1 advertisements-threshold 3
+{%- endif %}
+set policy-options community {{ vrf_name }} members target:{{ asn_local }}:{{ vrf_id }}
+set policy-options policy-statement {{ vrf_name }}-EXPORT term 1 from protocol {% if connection_type == 'bgp' %}bgp{% else %}static{% endif %}
+set policy-options policy-statement {{ vrf_name }}-EXPORT term 1 from prefix-list DEFAULT
+set policy-options policy-statement {{ vrf_name }}-EXPORT term 1 then local-preference {% if secondary == true %}90{% else %}150{% endif %}
+set policy-options policy-statement {{ vrf_name }}-EXPORT term 1 then community add {{ vrf_name }}
+set policy-options policy-statement {{ vrf_name }}-EXPORT term 1 then accept
+set policy-options policy-statement {{ vrf_name }}-EXPORT term 2 then reject
+set policy-options policy-statement {{ vrf_name }}-IMPORT term 1 from community {{ vrf_name }}
+set policy-options policy-statement {{ vrf_name }}-IMPORT term 1 then accept
+set policy-options policy-statement {{ vrf_name }}-IMPORT term 2 then reject
+{%- if connection_type == 'bgp' %}
+set policy-options prefix-list {{ vrf_name }} {{ customer_subnet }}
+set policy-options policy-statement {{ vrf_name }}-{% if secondary == true %}SECONDARY{% else %}PRIMARY{% endif %}_IN term 1 from protocol bgp
+set policy-options policy-statement {{ vrf_name }}-{% if secondary == true %}SECONDARY{% else %}PRIMARY{% endif %}_IN term 1 from prefix-list DEFAULT
+set policy-options policy-statement {{ vrf_name }}-{% if secondary == true %}SECONDARY{% else %}PRIMARY{% endif %}_IN term 1 then local-preference {% if secondary == true %}90{% else %}150{% endif %}
+set policy-options policy-statement {{ vrf_name }}-{% if secondary == true %}SECONDARY{% else %}PRIMARY{% endif %}_IN term 1 then accept
+set policy-options policy-statement {{ vrf_name }}-{% if secondary == true %}SECONDARY{% else %}PRIMARY{% endif %}_IN term 2 then reject
+set policy-options policy-statement {{ vrf_name }}-{% if secondary == true %}SECONDARY{% else %}PRIMARY{% endif %}_OUT term 1 from protocol aggregate
+set policy-options policy-statement {{ vrf_name }}-{% if secondary == true %}SECONDARY{% else %}PRIMARY{% endif %}_OUT term 1 from prefix-list {{ vrf_name }}
+set policy-options policy-statement {{ vrf_name }}-{% if secondary == true %}SECONDARY{% else %}PRIMARY{% endif %}_OUT term 1 then metric {% if secondary == true %}150{% else %}100{% endif %}
+{%- if secondary == true %}
+set policy-options policy-statement {{ vrf_name }}-SECONDARY_OUT term 1 then as-path-prepend "{{ asn_local }} {{ asn_local }}"
+{%- endif %}
+set policy-options policy-statement {{ vrf_name }}-{% if secondary == true %}SECONDARY{% else %}PRIMARY{% endif %}_OUT term 1 then accept
+set policy-options policy-statement {{ vrf_name }}-{% if secondary == true %}SECONDARY{% else %}PRIMARY{% endif %}_OUT term 2 then reject
+{%- endif %}
+set routing-instances {{ vrf_name }} instance-type vrf
+set routing-instances {{ vrf_name }} interface {{ interface }}.{{ vlan }}
+set routing-instances {{ vrf_name }} vrf-import {{ vrf_name }}-IMPORT
+set routing-instances {{ vrf_name }} vrf-export {{ vrf_name }}-EXPORT
+set routing-instances {{ vrf_name }} vrf-table-label
+set routing-instances {{ vrf_name }} routing-options auto-export
+{%- if connection_type == 'bgp' %}
+set routing-instances {{ vrf_name }} routing-options aggregate route {{ customer_subnet }}
+set routing-instances {{ vrf_name }} protocols bgp group {{ vrf_name }} type external
+set routing-instances {{ vrf_name }} protocols bgp group {{ vrf_name }} mtu-discovery
+set routing-instances {{ vrf_name }} protocols bgp group {{ vrf_name }} log-updown
+set routing-instances {{ vrf_name }} protocols bgp group {{ vrf_name }} neighbor {% if secondary == true %}{{ bgp.second_ngh }}{% else %}{{ bgp.prim_ngh }}{% endif %} description "{{ vrf_name }} {% if secondary == true %}SECONDARY{% else %}PRIMARY{% endif %} link"
+set routing-instances {{ vrf_name }} protocols bgp group {{ vrf_name }} neighbor {% if secondary == true %}{{ bgp.second_ngh }}{% else %}{{ bgp.prim_ngh }}{% endif %} import {{ vrf_name }}-{% if secondary == true %}SECONDARY{% else %}PRIMARY{% endif %}_IN
+set routing-instances {{ vrf_name }} protocols bgp group {{ vrf_name }} neighbor {% if secondary == true %}{{ bgp.second_ngh }}{% else %}{{ bgp.prim_ngh }}{% endif %} family inet any prefix-limit maximum 2000
+set routing-instances {{ vrf_name }} protocols bgp group {{ vrf_name }} neighbor {% if secondary == true %}{{ bgp.second_ngh }}{% else %}{{ bgp.prim_ngh }}{% endif %} family inet any prefix-limit teardown 95
+set routing-instances {{ vrf_name }} protocols bgp group {{ vrf_name }} neighbor {% if secondary == true %}{{ bgp.second_ngh }}{% else %}{{ bgp.prim_ngh }}{% endif %} family inet any prefix-limit teardown idle-timeout forever
+set routing-instances {{ vrf_name }} protocols bgp group {{ vrf_name }} neighbor {% if secondary == true %}{{ bgp.second_ngh }}{% else %}{{ bgp.prim_ngh }}{% endif %} authentication-key {{ bgp.bgp_pass }}
+set routing-instances {{ vrf_name }} protocols bgp group {{ vrf_name }} neighbor {% if secondary == true %}{{ bgp.second_ngh }}{% else %}{{ bgp.prim_ngh }}{% endif %} export {{ vrf_name }}-{% if secondary == true %}SECONDARY{% else %}PRIMARY{% endif %}_OUT
+set routing-instances {{ vrf_name }} protocols bgp group {{ vrf_name }} neighbor {% if secondary == true %}{{ bgp.second_ngh }}{% else %}{{ bgp.prim_ngh }}{% endif %} peer-as {{ bgp.asn_peer }}
+set routing-instances {{ vrf_name }} protocols bgp group {{ vrf_name }} neighbor {% if secondary == true %}{{ bgp.second_ngh }}{% else %}{{ bgp.prim_ngh }}{% endif %} bfd-liveness-detection minimum-interval 300
+set routing-instances {{ vrf_name }} protocols bgp group {{ vrf_name }} neighbor {% if secondary == true %}{{ bgp.second_ngh }}{% else %}{{ bgp.prim_ngh }}{% endif %} bfd-liveness-detection multiplier 3
+set policy-options prefix-list BGP-PEERS {% if secondary == true %}{{ bgp.second_ngh }}{% else %}{{ bgp.prim_ngh }}{% endif %}
+{%- else %}
+set routing-instances {{ vrf_name }} routing-options static route 0.0.0.0/0 next-hop {{ static.next_hop }}
+{%- endif %}

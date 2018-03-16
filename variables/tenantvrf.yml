@@ -1,0 +1,20 @@
+cfg_name: EA10040-MY-VRF
+vrf_name: EA10040-MY-VRF
+vrf_id: 10040
+interface_description: MY VRF uplink
+interface: xe-2/0/2
+vlan: 203
+customer_subnet: 10.127.96.0/24
+prim_ip: 10.240.73.210/30
+second_ip: 10.240.73.214/30
+asn_local: 64651
+connection_type: bgp # static or bgp, default static
+static:
+  vrrp_ip: 1.2.3.2
+  vrrp_pass: 125
+  next_hop: 1.2.3.1/32
+bgp:
+  prim_ngh: 10.240.73.208
+  second_ngh: 10.240.73.212
+  bgp_pass: MYVRF
+  asn_peer: 64620
