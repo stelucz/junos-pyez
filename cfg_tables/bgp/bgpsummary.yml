@@ -1,0 +1,26 @@
+---
+BgpSummaryTable:
+  rpc: get-bgp-summary-information
+  item: bgp-peer
+  key: peer-address
+  view: BgpSummaryView
+
+BgpSummaryView:
+  fields:
+    peer_address: peer-address
+    peer_as: peer-as
+    description: description
+    peer_state: peer-state
+    rib: _BgpRibTable
+    elapsed_time: elapsed-time
+
+_BgpRibTable:
+  item: bgp-rib
+  key: name
+  view: _BgpRibView
+
+_BgpRibView:
+  fields:
+    name: name
+    received_prefix: received-prefix-count
+    accepted_prefix: accepted-prefix-count
